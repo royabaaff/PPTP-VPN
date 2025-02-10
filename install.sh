@@ -1,32 +1,55 @@
 #!/bin/bash
 
-# Default IP Range
-DEFAULT_LOCAL_IP="10.10.10.1"
-DEFAULT_REMOTE_IP="10.10.10.100-200"
+# چک کردن اینکه نیاز به رستارت هست یا نه
+if dpkg-query -W needrestart >/dev/null 2>&1; then
+    sudo sed -i 's/#$nrconf{restart} = '"'"'i'"'"';/$nrconf{restart} = '"'"'a'"'"';/g' /etc/needrestart/needrestart.conf
+fi
 
-echo "Enter the local IP (press Enter to use default: $DEFAULT_LOCAL_IP):"
-read LOCAL_IP
-LOCAL_IP=${LOCAL_IP:-$DEFAULT_LOCAL_IP}
+# گرفتن نام اینترفیس WAN
+INTERFACE_NAME=$(ip a | awk '/state UP/ {print $2}' | tr -d ':')
+wan_ip=$(ip -f inet -o addr show $INTERFACE_NAME | awk '{print $7}' | cut -d/ -f1)
 
-echo "Enter the remote IP range (press Enter to use default: $DEFAULT_REMOTE_IP):"
-read REMOTE_IP
-REMOTE_IP=${REMOTE_IP:-$DEFAULT_REMOTE_IP}
+# گرفتن IP خارجی
+ppp1=$(ip route | awk '/default/ { print $3 }')
+ip=$(dig +short myip.opendns.com @resolver1.opendns.com)
 
-echo "Configuring VPN with local IP: $LOCAL_IP and remote IP range: $REMOTE_IP"
+# نصب pptpd
+echo "Installing PPTPD"
+sudo apt-get install pptpd -y
 
-# Apply configuration
-cat <<EOF > /etc/ppp/options.pptpd
-localip $LOCAL_IP
-remoteip $REMOTE_IP
+# تنظیم DNS گوگل
+echo "Setting Google DNS"
+echo -e "ms-dns 8.8.8.8\nms-dns 8.8.4.4" | sudo tee -a /etc/ppp/pptpd-options
+
+# تنظیمات PPTP
+echo "Editing PPTP Configuration"
+sudo tee -a /etc/pptpd.conf <<EOF
+localip $ppp1
+remoteip ${ppp1}0-200
 EOF
 
-# Enable IP Forwarding
-echo "net.ipv4.ip_forward = 1" | tee -a /etc/sysctl.conf
-sysctl -p
+# فعال‌سازی IP forwarding
+echo "Enabling IP forwarding"
+sudo tee -a /etc/sysctl.conf <<EOF
+net.ipv4.ip_forward = 1
+EOF
+sudo sysctl -p
 
-# Restart PPTP Service
-systemctl restart pptpd
+# پیکربندی فایروال
+echo "Configuring Firewall"
+sudo iptables -t nat -A POSTROUTING -o $INTERFACE_NAME -j MASQUERADE
+sudo iptables -A INPUT -s $ip/8 -i ppp0 -j ACCEPT
+sudo iptables -A FORWARD -i $INTERFACE_NAME -j ACCEPT
 
-echo "VPN setup completed successfully!"
-echo "To restart service: systemctl restart pptpd"
-echo "To check status: systemctl status pptpd"
+# درخواست نام کاربری و پسورد برای VPN
+echo "Set username:"
+read username
+echo "Set password:"
+read password
+echo "$username * $password *" | sudo tee -a /etc/ppp/chap-secrets
+
+# ریستارت کردن سرویس pptpd
+echo "Restarting PPTP service"
+sudo service pptpd restart
+
+echo "All done!"
