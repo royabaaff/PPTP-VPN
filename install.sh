@@ -7,12 +7,11 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Check if needrestart is installed and configure it to auto-restart services
+# Check if needrestart is installed
 if dpkg-query -W needrestart >/dev/null 2>&1; then
     echo "Configuring needrestart..."
-    if [ -f /etc/needrestart/needrestart.conf ]; then
-        sudo sed -i 's/#$nrconf{restart} = '\''i'\'';/$nrconf{restart} = '\''a'\'';/g' /etc/needrestart/needrestart.conf
-    else
+    # Create /etc/needrestart/needrestart.conf if it doesn't exist
+    if [ ! -f /etc/needrestart/needrestart.conf ]; then
         echo "File /etc/needrestart/needrestart.conf not found. Creating it..."
         sudo mkdir -p /etc/needrestart
         sudo tee /etc/needrestart/needrestart.conf <<EOF
@@ -20,6 +19,8 @@ if dpkg-query -W needrestart >/dev/null 2>&1; then
 \$nrconf{restart} = 'a';
 EOF
     fi
+    # Modify the configuration
+    sudo sed -i 's/#$nrconf{restart} = '\''i'\'';/$nrconf{restart} = '\''a'\'';/g' /etc/needrestart/needrestart.conf
 else
     echo "needrestart is not installed. Skipping configuration."
 fi
