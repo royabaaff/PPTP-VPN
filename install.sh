@@ -2,7 +2,7 @@
 
 # Check if needrestart is installed and configure it to auto-restart services
 if dpkg-query -W needrestart >/dev/null 2>&1; then
-    sudo sed -i 's/#$nrconf{restart} = '"'"'i'"'"';/$nrconf{restart} = '"'"'a'"'"';/g' /etc/needrestart/needrestart.conf
+    sudo sed -i 's/#$nrconf{restart} = "i";/$nrconf{restart} = "a";/g' /etc/needrestart/needrestart.conf
 fi
 
 # Install iptables if not installed
@@ -36,6 +36,11 @@ read allowed_ip
 echo "Installing PPTPD..."
 sudo apt-get install pptpd -y
 
+# Ensure necessary directories exist
+sudo mkdir -p /etc/ppp/
+touch /etc/ppp/chap-secrets
+touch /etc/ppp/pptpd-options
+
 # Ask user for DNS settings
 echo "Enter preferred primary DNS (default: 1.1.1.1):"
 read dns1
@@ -47,11 +52,11 @@ dns2=${dns2:-4.2.2.4}
 
 # Configure DNS settings
 echo "Setting DNS to $dns1 and $dns2..."
-echo -e "ms-dns $dns1\nms-dns $dns2" | sudo tee -a /etc/ppp/pptpd-options
+echo -e "ms-dns $dns1\nms-dns $dns2" | sudo tee /etc/ppp/pptpd-options
 
 # Configure PPTPD settings
 echo "Editing PPTP Configuration..."
-sudo tee -a /etc/pptpd.conf <<EOF
+sudo tee /etc/pptpd.conf <<EOF
 localip $ppp1
 remoteip ${ppp1}0-200
 EOF
@@ -74,7 +79,7 @@ echo "Set VPN username:"
 read username
 echo "Set VPN password:"
 read password
-echo "$username * $password *" | sudo tee -a /etc/ppp/chap-secrets
+echo "$username * $password *" | sudo tee /etc/ppp/chap-secrets
 
 # Restart PPTPD service
 echo "Restarting PPTP service..."
