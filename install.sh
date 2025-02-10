@@ -5,8 +5,15 @@ if dpkg-query -W needrestart >/dev/null 2>&1; then
     sudo sed -i 's/#$nrconf{restart} = '"'"'i'"'"';/$nrconf{restart} = '"'"'a'"'"';/g' /etc/needrestart/needrestart.conf
 fi
 
-# Get WAN interface name
-INTERFACE_NAME=$(ip a | awk '/state UP/ {print $2}' | tr -d ':')
+# Install iptables if not installed
+echo "Checking for iptables..."
+if ! command -v iptables &> /dev/null; then
+    echo "iptables not found. Installing..."
+    sudo apt-get install iptables -y
+fi
+
+# Get WAN interface name, filtering out loopback and virtual interfaces
+INTERFACE_NAME=$(ip -o link show | awk -F': ' '!/lo|loopback0/ && /UP/ {print $2; exit}')
 wan_ip=$(ip -f inet -o addr show $INTERFACE_NAME | awk '{print $7}' | cut -d/ -f1)
 
 # Get external IP
