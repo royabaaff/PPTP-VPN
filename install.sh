@@ -9,7 +9,19 @@ fi
 
 # Check if needrestart is installed and configure it to auto-restart services
 if dpkg-query -W needrestart >/dev/null 2>&1; then
-    sudo sed -i 's/#$nrconf{restart} = '\''i'\'';/$nrconf{restart} = '\''a'\'';/g' /etc/needrestart/needrestart.conf
+    echo "Configuring needrestart..."
+    if [ -f /etc/needrestart/needrestart.conf ]; then
+        sudo sed -i 's/#$nrconf{restart} = '\''i'\'';/$nrconf{restart} = '\''a'\'';/g' /etc/needrestart/needrestart.conf
+    else
+        echo "File /etc/needrestart/needrestart.conf not found. Creating it..."
+        sudo mkdir -p /etc/needrestart
+        sudo tee /etc/needrestart/needrestart.conf <<EOF
+# Configuration for needrestart
+\$nrconf{restart} = 'a';
+EOF
+    fi
+else
+    echo "needrestart is not installed. Skipping configuration."
 fi
 
 # Get WAN interface name
