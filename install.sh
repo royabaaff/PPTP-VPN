@@ -13,7 +13,15 @@ if ! command -v iptables &> /dev/null; then
 fi
 
 # Get WAN interface name, filtering out loopback and virtual interfaces
-INTERFACE_NAME=$(ip -o link show | awk -F': ' '!/lo|loopback0/ && /UP/ {print $2; exit}')
+INTERFACE_NAME=$(ip -o link show | awk -F': ' '!/lo|loopback/ && /UP/ {print $2; exit}')
+
+# Validate INTERFACE_NAME
+echo "Detected network interface: $INTERFACE_NAME"
+if [[ -z "$INTERFACE_NAME" ]]; then
+    echo "Could not automatically detect a valid network interface. Please enter it manually:"
+    read INTERFACE_NAME
+fi
+
 wan_ip=$(ip -f inet -o addr show $INTERFACE_NAME | awk '{print $7}' | cut -d/ -f1)
 
 # Get external IP
