@@ -25,12 +25,20 @@ else
     echo "needrestart is not installed. Skipping configuration."
 fi
 
-# Get WAN interface name
-INTERFACE_NAME=$(ip a | awk '/state UP/ {print $2}' | tr -d ':')
+# Get WAN interface name (exclude loopback and virtual interfaces)
+INTERFACE_NAME=$(ip a | awk '/state UP/ && !/LOOPBACK/ {print $2}' | tr -d ':' | head -n 1)
+if [ -z "$INTERFACE_NAME" ]; then
+    echo "Error: No valid network interface found."
+    exit 1
+fi
 wan_ip=$(ip -f inet -o addr show $INTERFACE_NAME | awk '{print $7}' | cut -d/ -f1)
 
 # Get external IP
-ppp1=$(ip route show default | awk '{print $3}')
+ppp1=$(ip route show default | awk '/default/ {print $3; exit}')
+if [ -z "$ppp1" ]; then
+    echo "Error: No default gateway found."
+    exit 1
+fi
 ip=$(dig +short myip.opendns.com @resolver1.opendns.com)
 
 # Ask for private IP range with a default suggestion
