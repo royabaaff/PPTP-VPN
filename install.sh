@@ -54,18 +54,21 @@ dns2=${dns2:-4.2.2.4}
 echo "Setting DNS to $dns1 and $dns2..."
 echo -e "ms-dns $dns1\nms-dns $dns2" | sudo tee /etc/ppp/pptpd-options
 
+# Ask user for private IP configuration
+echo "Enter private VPN IP range (default: 10.10.10.1):"
+read private_ip
+private_ip=${private_ip:-10.10.10.1}
+
 # Configure PPTPD settings
 echo "Editing PPTP Configuration..."
 sudo tee /etc/pptpd.conf <<EOF
-localip $ppp1
-remoteip ${ppp1}0-200
+localip $private_ip
+remoteip ${private_ip}10-200
 EOF
 
 # Enable IP forwarding
 echo "Enabling IP forwarding..."
-sudo tee -a /etc/sysctl.conf <<EOF
-net.ipv4.ip_forward = 1
-EOF
+echo "net.ipv4.ip_forward = 1" | sudo tee /etc/sysctl.conf
 sudo sysctl -p
 
 # Configure firewall rules
