@@ -1,4 +1,11 @@
 #!/bin/bash
+set -e
+
+# Check if script is run as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root"
+    exit 1
+fi
 
 # Check if needrestart is installed and configure it to auto-restart services
 if dpkg-query -W needrestart >/dev/null 2>&1; then
@@ -10,14 +17,16 @@ INTERFACE_NAME=$(ip a | awk '/state UP/ {print $2}' | tr -d ':')
 wan_ip=$(ip -f inet -o addr show $INTERFACE_NAME | awk '{print $7}' | cut -d/ -f1)
 
 # Get external IP
-ppp1=$(ip route | awk '/default/ { print $3 }')
+ppp1=$(ip route show default | awk '{print $3}')
 ip=$(dig +short myip.opendns.com @resolver1.opendns.com)
 
-# Ask for private IP range
+# Ask for private IP range with a default suggestion
+echo "Please enter the private IP range for VPN clients (e.g., 10.10.10)."
+echo "This will determine the range of IPs assigned to connected clients."
 read -p "Enter private IP range (default: 10.10.10): " private_ip
 private_ip=${private_ip:-10.10.10}
 
-# Ask for DNS servers
+# Ask for DNS servers with a default suggestion
 read -p "Use default DNS (1.1.1.1, 9.9.9.9)? (y/n): " use_default_dns
 if [[ "$use_default_dns" =~ ^[Yy]$ ]]; then
     dns1="1.1.1.1"
@@ -28,11 +37,28 @@ else
 fi
 
 # Ask for allowed client IP
+validate_ip() {
+    local ip=$1
+    if [[ $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 read -p "Enter allowed client IP (only this IP will be able to connect): " allowed_ip
+while ! validate_ip "$allowed_ip"; do
+    read -p "Invalid IP. Please enter a valid IP: " allowed_ip
+done
 
 # Install PPTPD
 echo "Installing PPTPD..."
-sudo apt-get install pptpd -y
+if sudo apt-get install pptpd -y; then
+    echo "PPTPD installed successfully."
+else
+    echo "Failed to install PPTPD. Exiting..."
+    exit 1
+fi
 
 # Configure DNS settings
 echo "Configuring DNS..."
@@ -56,6 +82,10 @@ sudo iptables -t nat -A POSTROUTING -o $INTERFACE_NAME -j MASQUERADE
 sudo iptables -A INPUT -s $allowed_ip -i ppp0 -j ACCEPT
 sudo iptables -A FORWARD -i $INTERFACE_NAME -j ACCEPT
 
+# Save firewall rules
+echo "Saving firewall rules..."
+sudo iptables-save | sudo tee /etc/iptables/rules.v4 > /dev/null
+
 # Ask for VPN username and password
 echo "Set VPN username:"
 read username
@@ -66,6 +96,12 @@ echo "$username * $password *" | sudo tee -a /etc/ppp/chap-secrets
 # Restart PPTP service
 echo "Restarting PPTP service..."
 sudo systemctl restart pptpd
+if sudo systemctl is-active --quiet pptpd; then
+    echo "PPTPD is running successfully."
+else
+    echo "Failed to start PPTPD. Please check the logs."
+    exit 1
+fi
 
 # Final instructions
 echo "PPTP VPN setup completed!"
